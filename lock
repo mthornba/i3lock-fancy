@@ -60,7 +60,7 @@ while true ; do
             printf "Usage: $(basename $0) [options]\n\n$OPTIONS\n\n" ; exit 1 ;;
         -d|--desktop) DESKTOP=$(which wmctrl) ; shift ;;
         -g|--greyscale) HUE=(-level 0%,100%,0.6 -set colorspace Gray -separate -average) ; shift ;;
-        -p|--pixelate) EFFECT=(-scale 10% -scale 1000%) ; shift ;;
+        -p|--pixelate) EFFECT=(-scale 5% -scale 2000%) ; shift ;;
         -f|--font)
             case "$2" in
                 "") shift 2 ;;
@@ -102,8 +102,24 @@ else #black
         --insidevercolor=0000001c --ringwrongcolor=00000055 --insidewrongcolor=0000001c)
 fi
 
-convert "$IMAGE" "${HUE[@]}" "${EFFECT[@]}" -font "$FONT" -pointsize 26 -fill "$BW" -gravity center \
-    -annotate +0+160 "$TEXT" "$ICON" -gravity center -composite "$IMAGE"
+PICX=$(identify -ping -format '%w' ${ICON})
+PICY=$(identify -ping -format '%h' ${ICON})
+
+# find centre of each monitor			    
+declare -A index monitor horiz vert offsetx offsety centrex centrey
+composite=''
+
+while read line
+do
+  [[ "$line" =~ ^([\s0-9]+):\ [\+\*a-zA-Z0-9\-]+\ ([0-9]+)\/[0-9]+x([0-9]+)\/[0-9]+([\-\+][0-9]+)([\-\+][0-9]+).* ]]
+  index=${BASH_REMATCH[1]}
+  picxpos[${index}]=$(( ${BASH_REMATCH[2]} / 2 + ${BASH_REMATCH[4]} - $PICX / 2 ))
+  picypos[${index}]=$(( ${BASH_REMATCH[3]} / 2 + ${BASH_REMATCH[5]} - $PICY / 2 ))
+  composite="${composite} ${ICON} -geometry +${picxpos[${index}]}+${picypos[${index}]} -composite"
+done < <(xrandr --current --listmonitors | grep -v Monitors) 
+
+convert "$IMAGE" "${HUE[@]}" "${EFFECT[@]}" -font "$FONT" -pointsize 26 -fill "$BW" \
+    ${composite} "$IMAGE"
 
 # If invoked with -d/--desktop, we'll attempt to minimize all windows (ie. show
 # the desktop) before locking.
